@@ -31,3 +31,9 @@ class CodeFile(Base):
     back_populates="code_file",
     cascade="all, delete-orphan",
 )
+
+    symbols = relationship(
+    "CodeSymbol",
+    back_populates="code_file",
+    cascade="all, delete-orphan",
+)
