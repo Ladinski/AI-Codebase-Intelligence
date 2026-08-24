@@ -25,3 +25,9 @@ class CodeFile(Base):
         "Repository",
         back_populates="files",
     )
+
+    chunks = relationship(
+    "CodeChunk",
+    back_populates="code_file",
+    cascade="all, delete-orphan",
+)
