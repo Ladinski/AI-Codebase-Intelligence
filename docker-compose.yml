@@ -7,10 +7,11 @@ services:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/codebase_intelligence
+    volumes:
+      - .:/workspace
     depends_on:
       db:
         condition: service_healthy
-
   db:
     image: postgres:16
     container_name: codebase_intelligence_db
