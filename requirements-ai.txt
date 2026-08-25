@@ -1,0 +1,2 @@
+sentence-transformers==6.0.0
+pinecone==9.1.0
