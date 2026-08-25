@@ -50,3 +50,18 @@ class VectorStoreService:
             vectors=vectors,
             namespace=namespace,
         )
+
+    def search(
+        self,
+        repository_id: int,
+        query_vector: list[float],
+        top_k: int = 5,
+    ):
+        namespace = f"repository-{repository_id}"
+
+        return self.index.query(
+            vector=query_vector,
+            top_k=top_k,
+            namespace=namespace,
+            include_metadata=True,
+        )
