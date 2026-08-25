@@ -26,3 +26,4 @@ class RAGResponse(BaseModel):
     prompt_tokens: int
     completion_tokens: int
     estimated_cost_usd: float
+    cache_hit: bool

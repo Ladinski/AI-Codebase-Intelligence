@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     pinecone_api_key: str
     pinecone_index_name: str = "codebase-intelligence"
     redis_url: str = "redis://redis:6379/0"
+    rag_cache_ttl_seconds: int = 900
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

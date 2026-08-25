@@ -1,0 +1,25 @@
+from sqlalchemy.orm import Session
+
+from app.core.config import settings
+from app.services.cache import CacheService
+from app.services.hybrid_search import HybridSearchService
+from app.services.llm import LLMService
+
+
+class RAGService:
+    def __init__(self):
+        self.search = HybridSearchService()
+        self.llm = LLMService()
+        self.cache = CacheService()
+
+    def answer(
+        self,
+        db: Session,
+        repository_id: int,
+        query: str,
+        top_k: int = 5,
+    ) -> dict:
+        query = query.strip()
+
+        if not query:
+            raise ValueError("Query cannot be empty")
