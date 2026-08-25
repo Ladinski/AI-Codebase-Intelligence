@@ -1,0 +1,57 @@
+[
+  {
+    "query": "How does user authentication work?",
+    "relevant_paths": [
+      "app/api/auth.py",
+      "app/api/dependencies.py",
+      "app/core/security.py",
+      "app/services/auth.py"
+    ]
+  },
+  {
+    "query": "Where are JWT access tokens created and decoded?",
+    "relevant_paths": [
+      "app/core/security.py"
+    ]
+  },
+  {
+    "query": "How are passwords hashed and verified?",
+    "relevant_paths": [
+      "app/core/security.py",
+      "app/services/auth.py"
+    ]
+  },
+  {
+    "query": "How does hybrid search combine semantic and lexical search?",
+    "relevant_paths": [
+      "app/services/hybrid_search.py"
+    ]
+  },
+  {
+    "query": "How are semantic embeddings searched?",
+    "relevant_paths": [
+      "app/services/semantic_search.py"
+    ]
+  },
+  {
+    "query": "How are RAG answers generated from retrieved code?",
+    "relevant_paths": [
+      "app/services/rag.py",
+      "app/services/llm.py"
+    ]
+  },
+  {
+    "query": "How are RAG responses cached?",
+    "relevant_paths": [
+      "app/services/cache.py",
+      "app/services/rag.py"
+    ]
+  },
+  {
+    "query": "How are repository indexing jobs processed in the background?",
+    "relevant_paths": [
+      "app/tasks/repository_indexing.py",
+      "app/core/celery_app.py"
+    ]
+  }
+]

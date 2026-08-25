@@ -80,3 +80,36 @@ class HybridSearchResult(BaseModel):
 class HybridSearchResponse(BaseModel):
     query: str
     results: list[HybridSearchResult]
+
+
+class RerankedSearchRequest(BaseModel):
+    repository_id: int
+    query: str
+    top_k: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+    )
+
+
+class RerankedSearchResult(BaseModel):
+    chunk_id: int
+    path: str
+    language: str | None
+    start_line: int
+    end_line: int
+    content: str
+
+    rrf_score: float
+    reranker_score: float
+
+    semantic_rank: int | None
+    bm25_rank: int | None
+
+    semantic_score: float | None
+    bm25_score: float | None
+
+
+class RerankedSearchResponse(BaseModel):
+    query: str
+    results: list[RerankedSearchResult]

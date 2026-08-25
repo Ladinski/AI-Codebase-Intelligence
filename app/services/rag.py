@@ -2,15 +2,16 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.services.cache import CacheService
-from app.services.hybrid_search import HybridSearchService
+# from app.services.hybrid_search import HybridSearchService
 from app.services.llm import LLMService
-
+from app.services.reranked_search import RerankedSearchService
 
 class RAGService:
     def __init__(self):
-        self.search = HybridSearchService()
+        self.search = RerankedSearchService()
         self.llm = LLMService()
         self.cache = CacheService()
+        
 
     def answer(
         self,
