@@ -7,6 +7,7 @@ from app.api.chunking import router as chunking_router
 from app.api.metadata import router as metadata_router
 from app.api.search import router as search_router
 from app.api.rag import router as rag_router
+from app.api.jobs import router as jobs_router
 from app.api.semantic_indexing import (
     router as semantic_indexing_router,
 )
@@ -24,6 +25,7 @@ app.include_router(metadata_router)
 app.include_router(semantic_indexing_router)
 app.include_router(search_router)
 app.include_router(rag_router)
+app.include_router(jobs_router)
 
 @app.get("/health")
 def health():
