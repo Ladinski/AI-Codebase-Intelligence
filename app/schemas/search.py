@@ -49,3 +49,34 @@ class BM25SearchResult(BaseModel):
 class BM25SearchResponse(BaseModel):
     query: str
     results: list[BM25SearchResult]
+
+
+class HybridSearchRequest(BaseModel):
+    repository_id: int
+    query: str
+    top_k: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+    )
+
+
+class HybridSearchResult(BaseModel):
+    chunk_id: int
+    path: str
+    language: str | None
+    start_line: int
+    end_line: int
+    content: str
+    rrf_score: float
+
+    semantic_rank: int | None
+    bm25_rank: int | None
+
+    semantic_score: float | None
+    bm25_score: float | None
+
+
+class HybridSearchResponse(BaseModel):
+    query: str
+    results: list[HybridSearchResult]
