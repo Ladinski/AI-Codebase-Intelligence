@@ -9,6 +9,8 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/codebase_intelligence
       PINECONE_API_KEY: ${PINECONE_API_KEY}
       PINECONE_INDEX_NAME: ${PINECONE_INDEX_NAME}
+      OLLAMA_URL: ${OLLAMA_URL}
+      OLLAMA_MODEL: ${OLLAMA_MODEL}
     volumes:
       - .:/workspace
     depends_on:
