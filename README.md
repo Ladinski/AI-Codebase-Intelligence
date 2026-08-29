@@ -85,6 +85,30 @@ Celery Worker
 
 Redis is also used to cache repeated RAG responses.
 
+## Demo
+
+AI Codebase Intelligence indexes a repository and lets you ask questions about the code using a grounded RAG pipeline.
+
+![AI Codebase Intelligence RAG demo](docs/demo.png)
+
+### What the demo shows
+
+The demo runs the full pipeline:
+
+`FastAPI → PostgreSQL → Redis → Celery → Ingestion → Chunking → Embeddings → Pinecone → BM25 + Semantic Search → RRF → Cross-Encoder Reranking → Ollama RAG → Source Citations → Redis Cache`
+
+The example asks:
+
+> **How does authentication work in this application?**
+
+The system retrieves the relevant implementation, generates an answer using the retrieved code, and returns source citations such as `app/api/auth.py`, `app/services/auth.py`, `app/api/dependencies.py`, and `app/core/security.py`.
+
+The same question is then submitted again to demonstrate Redis caching, returning `cache_hit: true`.
+
+### Video Demo
+
+[Watch the full terminal demo](docs/demo.mp4)
+
 ## Retrieval Pipeline
 
 The project uses multiple retrieval strategies rather than relying only on vector search.
