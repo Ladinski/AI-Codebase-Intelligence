@@ -1,16 +1,35 @@
 # AI Codebase Intelligence
 
-AI Codebase Intelligence is a backend system for indexing, searching, and understanding software repositories using retrieval-augmented generation (RAG).
+AI Codebase Intelligence is a backend AI system for indexing, searching, and understanding software repositories.
 
-Instead of sending an entire codebase to an LLM, the system ingests source files, splits them into searchable chunks, extracts structured code information, creates semantic embeddings, and retrieves only the code relevant to a question.
+It combines lexical retrieval, semantic search, reranking, RAG, background processing, caching, and MCP tools so developers can ask questions about a codebase and get answers grounded in the actual source files.
 
-The retrieval pipeline combines BM25 lexical search, semantic vector search, Reciprocal Rank Fusion (RRF), and cross-encoder reranking before passing the final context to a local LLM.
+## Why it exists
 
-The project also exposes read-only MCP tools so compatible AI clients can interact with an indexed codebase directly.
+Understanding an unfamiliar repository usually means manually searching files, following imports, and tracing how different parts of the system connect.
 
----
+This project reduces that work by indexing the repository once and making the code searchable through natural-language questions.
 
-## Architecture
+Instead of sending an entire repository to an LLM, the system retrieves only the most relevant code and gives that context to the model.
+
+## Key Features
+
+- BM25 lexical search
+- Semantic search with embeddings
+- Pinecone vector storage
+- Reciprocal Rank Fusion
+- Cross-encoder reranking
+- RAG answers grounded in source code
+- File and line-range citations
+- JWT authentication
+- PostgreSQL persistence
+- Redis caching
+- Celery background indexing
+- MCP tools for AI clients
+- Retrieval evaluation with Hit@5 and MRR@5
+- Docker Compose environment
+
+## How It Works
 
 ```text
 Repository
@@ -47,7 +66,7 @@ BM25 Search          Semantic Embeddings
       Grounded Answer + Citations
 ```
 
-Background repository indexing runs separately:
+Repository indexing runs asynchronously:
 
 ```text
 FastAPI
@@ -61,72 +80,54 @@ Celery Worker
    +--> Ingestion
    +--> Chunking
    +--> Metadata Extraction
-   +--> Embedding / Indexing
+   +--> Embedding / Pinecone Indexing
 ```
 
-Redis is also used to cache repeated RAG queries.
-
----
-
-## Features
-
-- FastAPI REST API
-- PostgreSQL persistence
-- JWT authentication
-- Password hashing
-- Repository ingestion
-- Source-code chunking
-- Structured code metadata extraction
-- Semantic embeddings
-- Pinecone vector search
-- BM25 lexical retrieval
-- Reciprocal Rank Fusion (RRF)
-- Cross-encoder reranking
-- Retrieval-augmented generation
-- File and line-range citations
-- Local LLM inference with Ollama
-- Redis response caching
-- Celery background indexing
-- Background job status tracking
-- MCP server
-- Read-only MCP tools
-- Retrieval evaluation
-- Automated tests
-- Docker Compose development environment
-
----
+Redis is also used to cache repeated RAG responses.
 
 ## Retrieval Pipeline
 
-The system uses several retrieval stages rather than relying on a single vector search.
+The project uses multiple retrieval strategies rather than relying only on vector search.
 
 ### BM25
 
-BM25 provides lexical retrieval and is useful when a question contains exact identifiers, function names, or terminology from the source code.
+BM25 is used for lexical retrieval.
+
+It performs well when queries contain exact identifiers, function names, variable names, or terminology used directly in the code.
+
+Example:
+
+```text
+decode_access_token
+```
 
 ### Semantic Search
 
-Source-code chunks are converted into embeddings and indexed in Pinecone.
+Code chunks are converted into embeddings and indexed in Pinecone.
 
-Queries are embedded using the same embedding model and matched against indexed code.
+A natural-language question is embedded using the same model and compared against the indexed vectors.
 
-Semantic retrieval allows the system to find relevant code even when the question does not contain the exact words used by the implementation.
+This allows the system to find relevant code even if the user's wording is different from the implementation.
+
+Example:
+
+```text
+Where does the application check whether a user is logged in?
+```
 
 ### Reciprocal Rank Fusion
 
-BM25 and semantic results are combined using Reciprocal Rank Fusion.
+BM25 and semantic search return different score types, so their raw scores are not directly comparable.
 
-RRF works with the rank position of results rather than trying to directly compare BM25 scores with vector similarity scores.
+RRF combines the two ranked lists using result positions instead.
 
 ### Cross-Encoder Reranking
 
-The fused candidate set is passed through a cross-encoder reranker.
+The fused candidates are passed through a cross-encoder reranker.
 
-Unlike embedding similarity, the reranker evaluates the query and candidate together before producing the final ranking.
+The reranker evaluates the query and code candidate together and produces the final result ordering.
 
-The final top results are used as context for the LLM.
-
----
+The best-ranked chunks are then passed to the LLM.
 
 ## Retrieval Evaluation
 
@@ -139,19 +140,15 @@ I created a small ground-truth evaluation set and compared the retrieval approac
 | Hybrid RRF | 0.875 | 0.692 |
 | RRF + Reranker | **1.000** | **0.875** |
 
-The evaluation showed that semantic retrieval initially performed better than equal-weight RRF.
+The evaluation showed that adding more retrieval components did not automatically improve retrieval.
 
-This was important because it showed that adding more retrieval techniques did not automatically improve the system.
+Equal-weight RRF performed worse than semantic search by itself.
 
-Adding a cross-encoder reranker improved MRR@5 from `0.854` for semantic retrieval to `0.875` while maintaining a Hit@5 of `1.000`.
+After adding cross-encoder reranking, the final pipeline maintained a Hit@5 of `1.000` and improved MRR@5 from `0.854` to `0.875`.
 
-Based on these results, the final RAG pipeline uses reranked retrieval.
+This is why the final RAG pipeline uses reranked retrieval.
 
----
-
-## RAG
-
-The RAG endpoint follows this pipeline:
+## RAG Flow
 
 ```text
 Question
@@ -178,60 +175,86 @@ Local LLM
 Answer + Source Metadata
 ```
 
-The LLM is instructed to answer using only retrieved code context and to avoid inventing files, functions, classes, or behavior that are not present in that context.
+The model is instructed to answer only from the retrieved context and avoid inventing files, functions, classes, or behavior.
 
-The response contains information about the source files, line ranges, and chunks used during generation.
+A response includes the source files and line ranges used during retrieval.
 
----
+## Example
+
+Input:
+
+```text
+How does authentication work in this application?
+```
+
+The system can retrieve code from files such as:
+
+```text
+app/api/dependencies.py
+app/core/security.py
+app/api/auth.py
+app/services/auth.py
+```
+
+The LLM then receives only those relevant chunks and generates a grounded explanation of the authentication flow.
+
+The response also includes metadata such as:
+
+```text
+path: app/core/security.py
+start_line: 1
+end_line: 57
+```
 
 ## Background Processing
 
-Repository indexing can be expensive because it may involve:
+Repository indexing can take longer than a normal API request because it involves:
 
-- Reading many source files
-- Chunking source code
-- Extracting structured metadata
-- Generating embeddings
-- Sending vectors to Pinecone
+- reading repository files
+- chunking source code
+- extracting structured metadata
+- generating embeddings
+- indexing vectors in Pinecone
 
 These operations are processed asynchronously using Celery.
 
-FastAPI creates an indexing job and immediately returns a job ID. Redis acts as the Celery broker and result backend, while a separate worker performs the indexing pipeline.
+The API creates a background task and immediately returns a job ID.
 
-Clients can use the job status endpoint to check the progress and result of an indexing operation.
+Redis acts as the Celery broker and result backend.
+
+The worker then performs:
 
 ```text
-Request
+Ingestion
    |
    v
-FastAPI
+Chunking
    |
    v
-Job ID returned
+Metadata Extraction
    |
-   +------------------------+
-                            |
-                            v
-                          Redis
-                            |
-                            v
-                      Celery Worker
-                            |
-                            v
-                Repository Processing
+   v
+Embedding Generation
+   |
+   v
+Pinecone Indexing
 ```
 
-This keeps expensive repository processing outside the HTTP request lifecycle.
-
----
+Clients can query the job status endpoint to monitor progress.
 
 ## Caching
 
 Redis is also used to cache RAG responses.
 
-Cache keys are generated using the repository, normalized query, and retrieval configuration.
+The cache key is generated from:
 
-The first request runs the complete pipeline:
+```text
+repository
+query
+top_k
+```
+
+The first request runs the full retrieval and generation pipeline:
 
 ```text
 Question
@@ -249,10 +272,10 @@ Reranking
 LLM
    |
    v
-Store in Redis
+Store Result
 ```
 
-An identical request can then use:
+An identical request can return directly from Redis:
 
 ```text
 Question
@@ -264,53 +287,40 @@ Cache Hit
 Cached Response
 ```
 
-Cached responses have a TTL so they expire automatically.
-
----
-
 ## MCP
 
-The project includes a Model Context Protocol (MCP) server that exposes codebase intelligence capabilities to compatible AI clients.
+The project includes a Model Context Protocol server.
 
-Available tools include:
+It exposes read-only tools that allow compatible AI clients to interact with indexed repositories.
 
-### `search_code`
+Available tools:
 
-Searches an indexed repository using the retrieval system.
+```text
+search_code
+get_file
+list_symbols
+ask_codebase
+```
 
-### `get_file`
+### search_code
 
-Retrieves the contents of an indexed source file.
+Search an indexed repository using the retrieval pipeline.
 
-### `list_symbols`
+### get_file
 
-Returns structured symbols extracted from the repository.
+Retrieve an indexed source file.
 
-### `ask_codebase`
+### list_symbols
 
-Runs a grounded RAG question against an indexed repository.
+Inspect structured symbols extracted from the repository.
+
+### ask_codebase
+
+Ask a grounded RAG question about a repository.
 
 The MCP interface is intentionally read-only.
 
-It does not expose arbitrary shell execution, unrestricted file modification, or repository deletion.
-
-This allows an AI client to inspect and reason about a repository without giving it unnecessary write access.
-
----
-
-## Authentication
-
-Users authenticate using JWT bearer tokens.
-
-Passwords are hashed before being stored.
-
-After a successful login, the API generates an expiring JWT containing the user's ID.
-
-Protected endpoints decode the token and load the corresponding user before allowing access to repository resources.
-
-JWT secrets and other credentials are loaded from environment variables rather than being stored directly in the source code.
-
----
+It does not expose arbitrary shell execution or unrestricted file modification.
 
 ## Tech Stack
 
@@ -341,7 +351,7 @@ JWT secrets and other credentials are loaded from environment variables rather t
 
 ### Integration
 
-- Model Context Protocol (MCP)
+- Model Context Protocol
 
 ### Testing and Evaluation
 
@@ -349,101 +359,30 @@ JWT secrets and other credentials are loaded from environment variables rather t
 - Hit@5
 - MRR@5
 
----
-
-## Project Structure
-
-```text
-ai-codebase-intelligence/
-|
-|-- app/
-|   |
-|   |-- api/
-|   |   |-- auth.py
-|   |   |-- dependencies.py
-|   |   |-- jobs.py
-|   |   |-- rag.py
-|   |   |-- search.py
-|   |
-|   |-- core/
-|   |   |-- celery_app.py
-|   |   |-- config.py
-|   |   |-- database.py
-|   |   |-- security.py
-|   |
-|   |-- mcp/
-|   |   |-- server.py
-|   |
-|   |-- models/
-|   |
-|   |-- repositories/
-|   |
-|   |-- schemas/
-|   |
-|   |-- services/
-|   |   |-- auth.py
-|   |   |-- bm25_search.py
-|   |   |-- cache.py
-|   |   |-- chunking.py
-|   |   |-- hybrid_search.py
-|   |   |-- ingestion.py
-|   |   |-- llm.py
-|   |   |-- metadata_extraction.py
-|   |   |-- rag.py
-|   |   |-- reranker.py
-|   |   |-- reranked_search.py
-|   |   |-- semantic_search.py
-|   |
-|   |-- tasks/
-|   |   |-- repository_indexing.py
-|   |
-|   |-- main.py
-|
-|-- evaluation/
-|   |-- retrieval_cases.json
-|   |-- evaluate_retrieval.py
-|
-|-- tests/
-|
-|-- scripts/
-|
-|-- Dockerfile
-|-- docker-compose.yml
-|-- requirements.txt
-|-- requirements-ai.txt
-|-- .env.example
-|-- README.md
-```
-
----
-
-## Running the Project
+## Quick Start
 
 ### Requirements
 
-You need:
+Install:
 
 - Docker
 - Docker Compose
 - Ollama
-- A Pinecone account and API key
 
----
+You also need a Pinecone API key.
 
-### 1. Clone the Repository
+### 1. Clone the repository
 
 ```bash
-git clone <repository-url>
-cd ai-codebase-intelligence
+git clone YOUR_REPOSITORY_URL
+cd AI-Codebase-Intelligence
 ```
 
----
+### 2. Create `.env`
 
-### 2. Configure Environment Variables
+Use `.env.example` as the template.
 
-Create a `.env` file based on `.env.example`.
-
-Configure the required values:
+Required configuration includes:
 
 ```env
 DATABASE_URL=postgresql://postgres:postgres@db:5432/codebase_intelligence
@@ -462,203 +401,179 @@ JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=60
 ```
 
-Do not commit `.env` or real credentials.
-
-A JWT secret can be generated with:
+Generate a JWT secret with:
 
 ```bash
 python -c "import secrets; print(secrets.token_urlsafe(64))"
 ```
 
----
+Never commit `.env`.
 
 ### 3. Start Ollama
 
-Pull the configured model if necessary:
+Pull the configured model:
 
 ```bash
 ollama pull qwen2.5-coder:3b
 ```
 
-Make sure Ollama is running before making RAG requests.
+Make sure Ollama is running.
 
----
-
-### 4. Start the Application
+### 4. Start the stack
 
 ```bash
 docker compose up --build -d
 ```
 
-Check the containers:
+Check the services:
 
 ```bash
 docker compose ps
 ```
 
-The stack contains:
+You should see:
 
 ```text
-FastAPI API
+API
 PostgreSQL
 Redis
 Celery Worker
 ```
 
----
+### 5. Run migrations
 
-### 5. Open the API Documentation
+```bash
+docker compose exec api alembic upgrade head
+```
 
-Swagger UI is available at:
+### 6. Open Swagger
 
 ```text
 http://localhost:8000/docs
 ```
 
-The API can be used to register/login, manage repositories, search indexed code, run RAG queries, and start background indexing jobs.
+From Swagger you can:
 
----
+- register/login
+- create repositories
+- start indexing jobs
+- run semantic search
+- run BM25 search
+- run hybrid search
+- run reranked search
+- ask RAG questions
+- inspect job status
 
-## Background Indexing
-
-Repository indexing can be submitted through the background job endpoint.
-
-The API returns a job ID instead of waiting for the complete indexing pipeline to finish.
-
-The job status endpoint can then be used to check whether the task is:
-
-```text
-PENDING
-PROGRESS
-SUCCESS
-FAILURE
-```
-
-The Celery worker can be monitored with:
-
-```bash
-docker compose logs -f worker
-```
-
----
-
-## Tests
-
-Run the automated tests inside Docker:
+## Run Tests
 
 ```bash
 docker compose exec api pytest -q
 ```
 
-The tests cover core functionality including authentication security behavior and retrieval-related logic.
-
----
-
-## Retrieval Evaluation
-
-Run the retrieval benchmark with:
+## Run Retrieval Evaluation
 
 ```bash
 docker compose exec api python -m evaluation.evaluate_retrieval
 ```
 
-The evaluation compares:
+Expected evaluation output for the current benchmark:
 
 ```text
+bm25       Hit@5=0.750 MRR@5=0.500
+semantic   Hit@5=1.000 MRR@5=0.854
+hybrid     Hit@5=0.875 MRR@5=0.692
+reranked   Hit@5=1.000 MRR@5=0.875
+```
+
+## Terminal Demo
+
+The strongest demo for this project is:
+
+```text
+Start repository indexing
+        |
+        v
+Wait for Celery job
+        |
+        v
+Ask a codebase question
+        |
+        v
+Show grounded answer
+        |
+        v
+Show source paths + line ranges
+        |
+        v
+Repeat query
+        |
+        v
+Show Redis cache hit
+```
+
+A good question to demonstrate is:
+
+```text
+How does authentication work in this application?
+```
+
+This shows the full project rather than only one component:
+
+```text
+FastAPI
+Redis
+Celery
+PostgreSQL
 BM25
 Semantic Search
-Hybrid RRF
-RRF + Cross-Encoder Reranking
+Pinecone
+RRF
+Reranker
+Ollama
+RAG
+Caching
 ```
 
-using Hit@5 and MRR@5.
+## Recording the Demo
 
-The measured results for the current evaluation set are:
+Use OBS Studio or ScreenToGif.
+
+Before recording:
+
+1. Start Ollama.
+2. Start Docker Compose.
+3. Make sure the repository has already built at least once.
+4. Open PowerShell in the repository root.
+5. Increase the terminal font size so output is readable.
+
+Record only the important workflow.
+
+Avoid recording long model downloads or Docker builds.
+
+A good final video should be around 30–60 seconds.
+
+Show:
 
 ```text
-BM25       Hit@5=0.750 MRR@5=0.500
-Semantic   Hit@5=1.000 MRR@5=0.854
-Hybrid     Hit@5=0.875 MRR@5=0.692
-Reranked   Hit@5=1.000 MRR@5=0.875
+background indexing job
+question
+grounded answer
+source files
+line ranges
+cache hit
 ```
 
----
+You can place the GIF or video near the top of this README after recording it.
 
-## MCP Development
+## Security
 
-The MCP server can be started with:
-
-```bash
-python -m app.mcp.server
-```
-
-It can also be inspected during development using MCP Inspector.
-
-The server exposes:
-
-```text
-search_code
-get_file
-list_symbols
-ask_codebase
-```
-
-These tools provide read-only access to indexed repository intelligence.
-
----
-
-## Design Decisions
-
-### Why use both BM25 and semantic retrieval?
-
-Semantic retrieval is useful for questions where the wording differs from the source code.
-
-BM25 is useful for exact technical terminology, identifiers, and function names.
-
-Using both provides different candidate signals.
-
-### Why use RRF?
-
-BM25 scores and vector similarity scores are not directly comparable.
-
-RRF combines ranked lists using their positions rather than attempting to normalize unrelated score types.
-
-### Why add a reranker?
-
-Evaluation showed that equal-weight RRF alone performed worse than semantic retrieval.
-
-Instead of assuming the hybrid system was better, I measured it.
-
-A cross-encoder reranker was then added to evaluate the query and candidate chunks together.
-
-This improved MRR@5 from `0.854` for semantic retrieval to `0.875` while maintaining a Hit@5 of `1.000`.
-
-### Why use background jobs?
-
-Repository indexing involves operations that can take significantly longer than a normal API request.
-
-Moving indexing into Celery allows FastAPI to return immediately while the worker handles the expensive processing separately.
-
-### Why use Redis?
-
-Redis serves two purposes:
-
-1. Celery broker and result backend for background processing.
-2. Cache for repeated RAG requests.
-
-### Why use a local LLM?
-
-Ollama allows the RAG pipeline to run without requiring a paid LLM API.
-
-The LLM provider is kept separate from the retrieval pipeline so the generation layer can be changed independently.
-
-### Why expose MCP tools?
-
-MCP allows compatible AI clients to use the project's capabilities as tools instead of requiring every interaction to happen directly through REST endpoints.
-
-The exposed tools are intentionally read-only to limit what an AI client can do.
-
----
+- Passwords are hashed before storage.
+- JWT authentication protects private endpoints.
+- JWT secrets are loaded from environment variables.
+- Repository access is restricted to the owning user.
+- `.env` is excluded from version control.
+- MCP tools are read-only.
+- The LLM is instructed to answer from retrieved code context.
 
 ## What I Learned
 
@@ -666,61 +581,22 @@ The main lesson from this project was that building a RAG system involves much m
 
 Retrieval quality had to be measured rather than assumed.
 
-My initial equal-weight hybrid retrieval was more complex than semantic retrieval but performed worse on the evaluation set. Building an evaluation pipeline exposed that problem.
+The first hybrid retrieval implementation was more complex than semantic retrieval but performed worse on the evaluation set.
 
-Adding cross-encoder reranking improved the final ranking and gave me a measurable reason to use the more complex retrieval pipeline.
+Building an evaluation pipeline exposed that problem.
 
-I also had to think about the software around the AI components: authentication, persistence, asynchronous processing, caching, configuration, testing, API design, vector storage, and safe tool access.
+Adding cross-encoder reranking improved the final ranking and gave a measurable reason to use the more complex retrieval pipeline.
 
-The result is a system where the LLM is one component inside a larger backend architecture rather than the entire application.
+The project also required building the engineering around the AI components:
 
----
+- authentication
+- persistent storage
+- background jobs
+- caching
+- vector infrastructure
+- API design
+- testing
+- configuration
+- MCP tool access
 
-## Current Retrieval Results
-
-| Method | Hit@5 | MRR@5 |
-| --- | ---: | ---: |
-| BM25 | 0.750 | 0.500 |
-| Semantic | 1.000 | 0.854 |
-| Hybrid RRF | 0.875 | 0.692 |
-| **RRF + Reranker** | **1.000** | **0.875** |
-
-The reranked pipeline currently provides the best retrieval performance on the project's evaluation set.
-
----
-
-## Security
-
-- Passwords are hashed before storage.
-- Protected endpoints require JWT authentication.
-- JWT secrets are stored in environment configuration.
-- Repository access is restricted to the owning user.
-- `.env` is excluded from version control.
-- MCP tools are read-only.
-- The LLM is instructed to answer from retrieved context rather than unrestricted assumptions.
-
----
-
-## Status
-
-The core system is complete and includes:
-
-```text
-API
-Database
-Authentication
-Repository ingestion
-Background jobs
-Semantic embeddings
-Pinecone vector search
-BM25
-RRF
-Cross-encoder reranking
-RAG
-Redis caching
-Celery
-MCP
-Retrieval evaluation
-Automated tests
-Docker Compose
-```
+The final result is a system where the LLM is one component inside a larger backend AI architecture.

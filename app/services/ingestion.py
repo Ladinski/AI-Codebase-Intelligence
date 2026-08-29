@@ -44,6 +44,11 @@ IGNORED_DIRECTORIES = {
     ".idea",
     ".vscode",
     "migrations",
+    "evaluation",
+}
+
+IGNORED_FILES = {
+    "README.md",
 }
 
 MAX_FILE_SIZE = 1_000_000
@@ -93,6 +98,9 @@ class IngestionService:
                 part in IGNORED_DIRECTORIES
                 for part in relative_path.parts
             ):
+                continue
+
+            if relative_path.name in IGNORED_FILES:
                 continue
 
             if file_path.suffix.lower() not in ALLOWED_EXTENSIONS:
